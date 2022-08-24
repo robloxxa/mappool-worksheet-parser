@@ -4,4 +4,4 @@
 /lib
 .env
 credentials.json
-/src/__tests__/sheets
+/src/__tests__/sheets/
