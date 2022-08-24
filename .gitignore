@@ -1,7 +1,7 @@
 # Project exclude paths
 /node_modules/
-/sheets/
 /.idea
 /lib
 .env
 credentials.json
+/src/__tests__/sheets
