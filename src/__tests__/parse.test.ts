@@ -1,13 +1,18 @@
 import { writeFile } from 'fs/promises';
-import { MappoolSpreadSheet } from '../index';
+import { MappoolSpreadSheet, parseLink } from '../index';
 import sheets from './sheets.json';
-import credentials from './credentials.json'; // Google Service Account credentials file
+import serviceAccountCredentials from './credentials.json'; // Google Service Account credentials file
 
 jest.setTimeout(15000);
 describe('Successfully parse array of worksheets', () => {
 	for (const sheet of sheets) {
 		it(`${sheet} parsed`, async () => {
-			const worksheet = new MappoolSpreadSheet({ urlLink: sheet, serviceAccountCredentials: credentials });
+			const { spreadsheetId, worksheetId } = parseLink(sheet);
+			const worksheet = new MappoolSpreadSheet({
+				spreadsheetId,
+				worksheetId,
+				serviceAccountCredentials,
+			});
 			const auth = jest.spyOn(worksheet, 'authenticate');
 			const load = jest.spyOn(worksheet, 'loadInfo');
 			const info = await worksheet.parse();

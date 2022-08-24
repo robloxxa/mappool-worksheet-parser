@@ -1,1 +1,1 @@
-export { MappoolSpreadSheet } from './MappoolSpreadSheet';
+export { MappoolSpreadSheet, parseLink } from './MappoolSpreadSheet';

@@ -4,14 +4,31 @@ import { GoogleSpreadsheet, GoogleSpreadsheetWorksheet } from 'google-spreadshee
 import { OAuth2Client } from 'google-spreadsheet';
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+export function parseLink(urlLink: string) {
+	const link = url.parse(urlLink);
+	if (!link || link.host !== 'docs.google.com' || link.protocol === null || link.hash === null) {
+		throw new Error('Wrong link');
+	}
+	const path = link.pathname?.split('/');
+	if (!path) throw new Error('Cannot resolve Path Name');
+	const params = new URLSearchParams(link.hash.slice(1));
+
+	if (path[1] !== 'spreadsheets') {
+		throw new Error('Wrong Link');
+	} else if (!params?.has('gid')) {
+		throw new Error('Cannot find worksheet id');
+	}
+	return { spreadsheetId: path[3], worksheetId: params.get('gid') || '' };
+}
+
 export class MappoolSpreadSheet implements Mappool {
 	private readonly apiKey?: string;
 	private readonly oAuth2Client?: OAuth2Client;
 	private readonly serviceAccountCredentials?: { client_email: string; private_key: string };
-
+	public authenticated: boolean;
+	public infoLoaded: boolean;
 	public spreadsheet: GoogleSpreadsheet;
 	public worksheet?: GoogleSpreadsheetWorksheet;
-	public url: string;
 	public spreadsheetId: string;
 	public worksheetId: string;
 	public spreadsheetName: string;
@@ -20,38 +37,26 @@ export class MappoolSpreadSheet implements Mappool {
 
 	constructor(
 		public options: {
-			urlLink: string;
+			spreadsheetId: string;
+			worksheetId: string;
 			apiKey?: string;
 			oAuth2Client?: OAuth2Client;
 			serviceAccountCredentials?: { client_email: string; private_key: string };
 		}
 	) {
-		this.spreadsheetName = '';
-		this.worksheetName = '';
-		this.rounds = [];
 		this.apiKey = options.apiKey;
 		this.oAuth2Client = options.oAuth2Client;
 		this.serviceAccountCredentials = options.serviceAccountCredentials;
-		this.url = options.urlLink;
 
-		const link = url.parse(this.url);
-		if (!link || link.host !== 'docs.google.com' || link.protocol === null || link.hash === null) {
-			throw new Error('Wrong link');
-		}
-		const path = link.pathname?.split('/');
-		if (!path) throw new Error('Cannot resolve Path Name');
-		const params = new URLSearchParams(link.hash.slice(1));
-
-		if (path[1] !== 'spreadsheets') {
-			throw new Error('Wrong Link');
-		} else if (!params?.has('gid')) {
-			throw new Error('Cannot find worksheet id');
-		}
-
-		this.spreadsheetId = path[3];
-		this.worksheetId = params.get('gid') || '';
-
+		this.spreadsheetName = '';
+		this.worksheetName = '';
+		this.spreadsheetId = options.spreadsheetId;
+		this.worksheetId = options.worksheetId;
+		this.rounds = [];
 		this.spreadsheet = new GoogleSpreadsheet(this.spreadsheetId);
+
+		this.infoLoaded = false;
+		this.authenticated = false;
 	}
 
 	async authenticate(maxTries = 5, _try = 0) {
@@ -61,6 +66,7 @@ export class MappoolSpreadSheet implements Mappool {
 			else if (this.apiKey) await this.spreadsheet.useApiKey(this.apiKey);
 			else if (this.oAuth2Client) await this.spreadsheet.useOAuth2Client(this.oAuth2Client);
 			else throw new Error('No authentication method specified!');
+			this.authenticated = true;
 		} catch (e: any) {
 			if (e.errno === -4077 && maxTries > _try) {
 				await sleep(1000);
@@ -72,6 +78,7 @@ export class MappoolSpreadSheet implements Mappool {
 	}
 
 	async loadInfo(maxTries = 5, _try = 0) {
+		if (!this.authenticated) await this.authenticate();
 		try {
 			if (!this.worksheet) {
 				await this.spreadsheet.loadInfo();
@@ -81,6 +88,7 @@ export class MappoolSpreadSheet implements Mappool {
 				this.worksheetName = this.worksheet.title;
 			}
 			await this.worksheet.loadCells();
+			this.infoLoaded = true;
 		} catch (e: any) {
 			if (e.errno === -4077 && maxTries > _try) {
 				await sleep(1000);
@@ -118,7 +126,6 @@ export class MappoolSpreadSheet implements Mappool {
 	}
 
 	async parse(): Promise<Mappool> {
-		await this.authenticate();
 		await this.loadInfo();
 		if (this.spreadsheet === undefined || this.worksheet === undefined) throw new Error('Something gone wrong');
 
